@@ -13,7 +13,7 @@ func TestMain(t *testing.T) {
 	s := httptest.NewServer(handler)
 	defer s.Close()
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i <= RateLimit; i++ {
 		client := s.Client()
 		fmt.Printf("server url: %s\n", s.URL)
 		req, err := http.NewRequest("GET", s.URL, nil)
@@ -24,8 +24,16 @@ func TestMain(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("Receive %d\n", resp.StatusCode)
+		if i < RateLimit {
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Receive %d\n", resp.StatusCode)
+			}
+
+		} else {
+			if resp.StatusCode != http.StatusTooManyRequests {
+				t.Fatalf("Receive %d\n", resp.StatusCode)
+			}
+
 		}
 		actual, err := ioutil.ReadAll(resp.Body)
 		fmt.Printf("%v\n", string(actual))
