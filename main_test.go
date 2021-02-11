@@ -6,14 +6,16 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"github.com/accelsao/dcard-middleware/middleware"
 )
 
 func TestSeqentialRequest(t *testing.T) {
-	handler := NewMiddleware(10)
+	handler := middleware.NewMiddleware(10)
+	
 	s := httptest.NewServer(handler)
 	defer s.Close()
 	okCount := 0
-	for i := 0; i <= handler.ratelimit; i++ {
+	for i := 0; i <= handler.Ratelimit; i++ {
 		client := s.Client()
 		req, err := http.NewRequest("GET", s.URL, nil)
 		// send request the same time from the same IP address
@@ -23,7 +25,7 @@ func TestSeqentialRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i < handler.ratelimit {
+		if i < handler.Ratelimit {
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Receive %d\n", resp.StatusCode)
 			}
@@ -31,8 +33,8 @@ func TestSeqentialRequest(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ratelimitRemain != handler.ratelimit-(i+1) {
-				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.ratelimit-(i+1), ratelimitRemain)
+			if ratelimitRemain != handler.Ratelimit-(i+1) {
+				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.Ratelimit-(i+1), ratelimitRemain)
 
 			}
 			okCount++
@@ -43,20 +45,20 @@ func TestSeqentialRequest(t *testing.T) {
 		}
 
 	}
-	if okCount != handler.ratelimit {
-		t.Fatalf("number of success request should be %v, got %v\n", handler.ratelimit, okCount)
+	if okCount != handler.Ratelimit {
+		t.Fatalf("number of success request should be %v, got %v\n", handler.Ratelimit, okCount)
 	}
 }
 
 // Half of them send reqs on @time
 // Other send reqs on @time + 1hr
 func TestSeqentialRequest2(t *testing.T) {
-	handler := NewMiddleware(20)
+	handler := middleware.NewMiddleware(20)
 	s := httptest.NewServer(handler)
 	defer s.Close()
 	okCount := 0
 	// 3 additional that must be blocked
-	for i := 0; i < handler.ratelimit + 3; i++ {
+	for i := 0; i < handler.Ratelimit+3; i++ {
 		client := s.Client()
 		req, err := http.NewRequest("GET", s.URL, nil)
 		// send request the same time from the same IP address
@@ -66,7 +68,7 @@ func TestSeqentialRequest2(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i < handler.ratelimit {
+		if i < handler.Ratelimit {
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Receive %d\n", resp.StatusCode)
 			}
@@ -74,8 +76,8 @@ func TestSeqentialRequest2(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ratelimitRemain != handler.ratelimit-(i+1) {
-				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.ratelimit-(i+1), ratelimitRemain)
+			if ratelimitRemain != handler.Ratelimit-(i+1) {
+				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.Ratelimit-(i+1), ratelimitRemain)
 
 			}
 			okCount++
@@ -85,7 +87,7 @@ func TestSeqentialRequest2(t *testing.T) {
 			}
 		}
 	}
-	for i := 0; i < handler.ratelimit + 3; i++ {
+	for i := 0; i < handler.Ratelimit+3; i++ {
 		client := s.Client()
 		req, err := http.NewRequest("GET", s.URL, nil)
 		// send request the same time from the same IP address
@@ -95,7 +97,7 @@ func TestSeqentialRequest2(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i < handler.ratelimit {
+		if i < handler.Ratelimit {
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Receive %d\n", resp.StatusCode)
 			}
@@ -103,8 +105,8 @@ func TestSeqentialRequest2(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ratelimitRemain != handler.ratelimit-(i+1) {
-				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.ratelimit-(i+1), ratelimitRemain)
+			if ratelimitRemain != handler.Ratelimit-(i+1) {
+				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.Ratelimit-(i+1), ratelimitRemain)
 
 			}
 			okCount++
@@ -114,7 +116,7 @@ func TestSeqentialRequest2(t *testing.T) {
 			}
 		}
 	}
-	expectCount := handler.ratelimit * 2
+	expectCount := handler.Ratelimit * 2
 	if okCount != expectCount {
 		t.Fatalf("number of success request should be %v, got %v\n", expectCount, okCount)
 	}
