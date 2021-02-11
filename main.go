@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"context"
 	"log"
 	"net/http"
@@ -14,7 +13,7 @@ import (
 
 const (
 	// RateLimit   = 10
-	TimeToReset = time.Duration(1) * time.Hour
+	// TimeToReset = time.Duration(1) * time.Hour
 )
 
 type Metadata struct {
@@ -47,20 +46,14 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var data Metadata
 	h.mu.Lock()
 	if data, exist := h.visit[addr]; !exist {
-		fmt.Println("Here")
 		h.visit[addr] = Metadata{
 			count:      1,
 			timeExpire: GetNextExpireTime(t),
 		}
 	} else {
-		fmt.Printf("data.count: %v, h.ratelimiet: %v\n", data.count, h.ratelimit)
-
 		// check whether visit times reach limit
 		if data.count >= h.ratelimit {
-			// timeElapsed := t.Sub(data.timeExpire)
-			fmt.Printf("t: %v -> data.timeExpire: %v\n", t, data.timeExpire)
 			after := t.After(data.timeExpire) || t.Equal(data.timeExpire)
-			fmt.Printf("after: %v\n", after)
 			if after {
 				h.visit[addr] = Metadata{
 					count:      1,

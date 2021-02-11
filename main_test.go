@@ -1,9 +1,6 @@
 package main
 
 import (
-	// "fmt"
-	// "io/ioutil"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -66,7 +63,6 @@ func TestSeqentialRequest2(t *testing.T) {
 		req.Header.Add("X-Forwarded-For", "1.2.3.4:8080")
 		req.Header.Add("Date", time.Date(2021, 1, 1, 12, 0, 0, 0, time.Local).Format(time.RFC3339))
 		resp, err := client.Do(req)
-		fmt.Println("Receive Resp")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +84,6 @@ func TestSeqentialRequest2(t *testing.T) {
 				t.Fatalf("Receive %d\n", resp.StatusCode)
 			}
 		}
-		fmt.Printf("Round %d finished\n", i)
 	}
 	for i := 0; i < handler.ratelimit + 3; i++ {
 		client := s.Client()
