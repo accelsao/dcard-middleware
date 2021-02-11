@@ -1,18 +1,19 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"time"
 )
 
 const (
-	RateLimit   = 2
+	// RateLimit   = 10
 	TimeToReset = time.Duration(1) * time.Hour
 )
 
@@ -21,41 +22,53 @@ type Metadata struct {
 	timeExpire time.Time
 }
 
-// ClientMetadata is recorded for server usages
-type ClientMetadata struct {
-	mu    sync.Mutex
-	visit map[string]Metadata
+// ServerHandler is recorded for server usages
+type ServerHandler struct {
+	mu        sync.Mutex
+	visit     map[string]Metadata
+	ratelimit int
 }
 
 // NewMiddleware creates a handler
-func NewMiddleware() *ClientMetadata {
-	mw := &ClientMetadata{
-		visit: make(map[string]Metadata),
+func NewMiddleware(ratelimit int) *ServerHandler {
+	mw := &ServerHandler{
+		visit:     make(map[string]Metadata),
+		ratelimit: ratelimit,
 	}
 	return mw
 }
 
-func (h *ClientMetadata) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	t := time.Now()
+func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
+	t := GetCurrentTime(r)
+	// fmt.Printf("time:%v\n", t)	
 	addr := GetIP(r)
+	// fmt.Printf("addr:%v\n", addr)	
 	var data Metadata
 	h.mu.Lock()
 	if data, exist := h.visit[addr]; !exist {
+		fmt.Println("Here")
 		h.visit[addr] = Metadata{
 			count:      1,
 			timeExpire: GetNextExpireTime(t),
 		}
 	} else {
+		fmt.Printf("data.count: %v, h.ratelimiet: %v\n", data.count, h.ratelimit)
+
 		// check whether visit times reach limit
-		if data.count >= RateLimit {
-			if t.Sub(data.timeExpire) >= 0 {
+		if data.count >= h.ratelimit {
+			// timeElapsed := t.Sub(data.timeExpire)
+			fmt.Printf("t: %v -> data.timeExpire: %v\n", t, data.timeExpire)
+			after := t.After(data.timeExpire) || t.Equal(data.timeExpire)
+			fmt.Printf("after: %v\n", after)
+			if after {
 				h.visit[addr] = Metadata{
 					count:      1,
 					timeExpire: GetNextExpireTime(t),
 				}
 			} else {
 				http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+				h.mu.Unlock()
 				return
 			}
 		} else {
@@ -70,7 +83,22 @@ func (h *ClientMetadata) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.mu.Unlock()
 
-	fmt.Fprintf(w, "client from %s visit %d times, reset after %v\n", addr, data.count, data.timeExpire)
+	// Add header
+	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(h.ratelimit-data.count))
+	w.Header().Set("X-RateLimit-Reset", data.timeExpire.Sub(t).String())
+
+	// fmt.Fprintf(w, "[log] client from %s visit %d times, reset after %v\n", addr, data.count, data.timeExpire)
+}
+
+// GetCurrentTime return current time, Header.Date if in test mode
+func GetCurrentTime(r *http.Request) time.Time {
+	t := r.Header.Get("Date")
+	if t != "" {
+		// format: 2021-01-01 12:00:00 +0800 CST
+		tm, _ := time.Parse(time.RFC3339, t)
+		return tm
+	}
+	return time.Now()
 }
 
 // GetNextExpireTime return time round to next hour
@@ -92,7 +120,7 @@ func GetIP(r *http.Request) string {
 // NewServer create a new server
 func NewServer() *http.Server {
 	mux := http.NewServeMux()
-	handler := NewMiddleware()
+	handler := NewMiddleware(1000)
 	mux.Handle("/hello", handler)
 
 	s := &http.Server{

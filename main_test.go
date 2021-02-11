@@ -1,41 +1,126 @@
 package main
 
 import (
+	// "fmt"
+	// "io/ioutil"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 )
 
-func TestMain(t *testing.T) {
-	handler := NewMiddleware()
+func TestSeqentialRequest(t *testing.T) {
+	handler := NewMiddleware(10)
 	s := httptest.NewServer(handler)
 	defer s.Close()
-
-	for i := 0; i <= RateLimit; i++ {
+	okCount := 0
+	for i := 0; i <= handler.ratelimit; i++ {
 		client := s.Client()
-		fmt.Printf("server url: %s\n", s.URL)
 		req, err := http.NewRequest("GET", s.URL, nil)
-		req.Header.Add("X-Forwarded-For", "1.2.3.5:8080")
-
+		// send request the same time from the same IP address
+		req.Header.Add("X-Forwarded-For", "1.2.3.4:8080")
+		req.Header.Add("Date", time.Date(2021, 1, 1, 12, 0, 0, 0, time.Local).Format(time.RFC3339))
 		resp, err := client.Do(req)
-		// resp, err := http.Get(s.URL)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i < RateLimit {
+		if i < handler.ratelimit {
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("Receive %d\n", resp.StatusCode)
 			}
+			ratelimitRemain, err := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ratelimitRemain != handler.ratelimit-(i+1) {
+				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.ratelimit-(i+1), ratelimitRemain)
 
+			}
+			okCount++
 		} else {
 			if resp.StatusCode != http.StatusTooManyRequests {
 				t.Fatalf("Receive %d\n", resp.StatusCode)
 			}
-
 		}
-		actual, err := ioutil.ReadAll(resp.Body)
-		fmt.Printf("%v\n", string(actual))
+
+	}
+	if okCount != handler.ratelimit {
+		t.Fatalf("number of success request should be %v, got %v\n", handler.ratelimit, okCount)
+	}
+}
+
+// Half of them send reqs on @time
+// Other send reqs on @time + 1hr
+func TestSeqentialRequest2(t *testing.T) {
+	handler := NewMiddleware(20)
+	s := httptest.NewServer(handler)
+	defer s.Close()
+	okCount := 0
+	// 3 additional that must be blocked
+	for i := 0; i < handler.ratelimit + 3; i++ {
+		client := s.Client()
+		req, err := http.NewRequest("GET", s.URL, nil)
+		// send request the same time from the same IP address
+		req.Header.Add("X-Forwarded-For", "1.2.3.4:8080")
+		req.Header.Add("Date", time.Date(2021, 1, 1, 12, 0, 0, 0, time.Local).Format(time.RFC3339))
+		resp, err := client.Do(req)
+		fmt.Println("Receive Resp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i < handler.ratelimit {
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Receive %d\n", resp.StatusCode)
+			}
+			ratelimitRemain, err := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ratelimitRemain != handler.ratelimit-(i+1) {
+				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.ratelimit-(i+1), ratelimitRemain)
+
+			}
+			okCount++
+		} else {
+			if resp.StatusCode != http.StatusTooManyRequests {
+				t.Fatalf("Receive %d\n", resp.StatusCode)
+			}
+		}
+		fmt.Printf("Round %d finished\n", i)
+	}
+	for i := 0; i < handler.ratelimit + 3; i++ {
+		client := s.Client()
+		req, err := http.NewRequest("GET", s.URL, nil)
+		// send request the same time from the same IP address
+		req.Header.Add("X-Forwarded-For", "1.2.3.4:8080")
+		req.Header.Add("Date", time.Date(2021, 1, 1, 13, 0, 0, 0, time.Local).Format(time.RFC3339))
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i < handler.ratelimit {
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Receive %d\n", resp.StatusCode)
+			}
+			ratelimitRemain, err := strconv.Atoi(resp.Header.Get("X-RateLimit-Remaining"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ratelimitRemain != handler.ratelimit-(i+1) {
+				t.Fatalf("X-RateLimit-Remaining should be %v, got %v\n", handler.ratelimit-(i+1), ratelimitRemain)
+
+			}
+			okCount++
+		} else {
+			if resp.StatusCode != http.StatusTooManyRequests {
+				t.Fatalf("Receive %d\n", resp.StatusCode)
+			}
+		}
+	}
+	expectCount := handler.ratelimit * 2
+	if okCount != expectCount {
+		t.Fatalf("number of success request should be %v, got %v\n", expectCount, okCount)
 	}
 }
