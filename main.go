@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"github.com/accelsao/dcard-middleware/middleware"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"github.com/accelsao/dcard-middleware/middleware"
 )
 
 // NewServer create a new server

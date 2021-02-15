@@ -29,9 +29,7 @@ func NewMiddleware(ratelimit int) *ServerHandler {
 func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	t := GetCurrentTime(r)
-	// fmt.Printf("time:%v\n", t)
 	addr := GetIP(r)
-	// fmt.Printf("addr:%v\n", addr)
 	var data Metadata
 	h.mu.Lock()
 	if data, exist := h.visit[addr]; !exist {
@@ -68,8 +66,6 @@ func (h *ServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Add header
 	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(h.Ratelimit-data.count))
 	w.Header().Set("X-RateLimit-Reset", data.timeExpire.Sub(t).String())
-
-	// fmt.Fprintf(w, "[log] client from %s visit %d times, reset after %v\n", addr, data.count, data.timeExpire)
 }
 
 // GetCurrentTime return current time, Header.Date if in test mode

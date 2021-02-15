@@ -1,17 +1,21 @@
-package main
+package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
-	"github.com/accelsao/dcard-middleware/middleware"
 )
 
+var _ = fmt.Printf
+
+// import "context"
+
 func TestSeqentialRequest(t *testing.T) {
-	handler := middleware.NewMiddleware(10)
-	
+	handler := NewMiddleware(10)
+
 	s := httptest.NewServer(handler)
 	defer s.Close()
 	okCount := 0
@@ -53,7 +57,7 @@ func TestSeqentialRequest(t *testing.T) {
 // Half of them send reqs on @time
 // Other send reqs on @time + 1hr
 func TestSeqentialRequest2(t *testing.T) {
-	handler := middleware.NewMiddleware(20)
+	handler := NewMiddleware(20)
 	s := httptest.NewServer(handler)
 	defer s.Close()
 	okCount := 0
