@@ -63,6 +63,9 @@ func New(opts Options) *Limiter {
 	if opts.Duration <= 0 {
 		opts.Duration = time.Hour
 	}
+	if opts.Client == nil {
+		return newMemLimiter(&opts)
+	}
 	return newRedisLimiter(&opts)
 }
 
@@ -110,13 +113,19 @@ func (l *Limiter) Get(ip string) (Result, error) {
 		return result, err
 	}
 	result = Result{}
-	result.Remaining = int(res[0].(int64))
 
-	timestamp := res[1].(int64)
-	sec := timestamp / 1e3
-	nsec := (timestamp - sec*1e3) * 1e6
+	switch res[1].(type) {
+	case time.Time:
+		result.Remaining = res[0].(int)
+		result.Reset = res[1].(time.Time)
+	default:
+		result.Remaining = int(res[0].(int64))
+		timestamp := res[1].(int64)
+		sec := timestamp / 1e3
+		nsec := (timestamp - sec*1e3) * 1e6
+		result.Reset = time.Unix(sec, nsec)
+	}
 
-	result.Reset = time.Unix(sec, nsec)
 	return result, nil
 }
 

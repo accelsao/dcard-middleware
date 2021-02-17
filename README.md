@@ -2,9 +2,10 @@
 - [X] client visit times count
 - [X] server timeout for each IP
 - [ ] start server by golang `select` (better?)
-- [X] add seqential test
+- [X] add get/remove test (redis)
+- [X] add get/remove test (mem)
 - [ ] add concurrent test
-- [ ] use Redis for server storing
+- [ ] add main.go
 
 # QA
 ## Why use Redis, instead of golang map?
