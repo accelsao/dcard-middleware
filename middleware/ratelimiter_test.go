@@ -57,7 +57,7 @@ func TestRedisRateLimiter(t *testing.T) {
 	}
 	defer rdb.Close()
 
-	t.Run("ratelimiter.New, With default options", func(t *testing.T) {
+	t.Run("ratelimiter.New, With Default Options", func(t *testing.T) {
 		assert := assert.New(t)
 
 		var limiter *Limiter
@@ -83,8 +83,47 @@ func TestRedisRateLimiter(t *testing.T) {
 			assert.Nil(err)
 			assert.Equal(999, res.Remaining)
 		})
-
 	})
+
+	t.Run("ratelimiter.New, With Options", func(t *testing.T) {
+		assert := assert.New(t)
+
+		var limiter *Limiter
+		var id = genID()
+		t.Run("ratelimiter.New", func(t *testing.T) {
+			limiter = New(Options{
+				IPLimit:  2,
+				Duration: time.Second,
+				Client:   &redisClient{rdb}})
+		})
+		t.Run("limiter.Get", func(t *testing.T) {
+			res, err := limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(1, res.Remaining)
+			assert.True(res.Reset.UnixNano() > time.Now().UnixNano())
+			assert.True(res.Reset.UnixNano() <= time.Now().Add(time.Second).UnixNano())
+
+			res, err = limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(0, res.Remaining)
+			res, err = limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(-1, res.Remaining)
+			res, err = limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(-1, res.Remaining)
+		})
+		t.Run("limiter.Remove", func(t *testing.T) {
+			err := limiter.Remove(id)
+			assert.Nil(err)
+			err = limiter.Remove(id)
+			assert.Nil(err)
+			res, err := limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(1, res.Remaining)
+		})
+	})
+
 }
 
 func genID() string {
