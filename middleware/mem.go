@@ -41,8 +41,8 @@ func (m *memLimiter) getLimit(key string, policy ...int) ([]interface{}, error) 
 			count: data.count - 1,
 			reset: data.reset,
 		}
-		if data.count < -1 {
-			data.count = -1
+		if md.count < -1 {
+			md.count = -1
 		}
 	}
 	m.table[key] = md
