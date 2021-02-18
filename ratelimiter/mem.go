@@ -26,7 +26,7 @@ func newMemLimiter(opts *Options) *Limiter {
 	return &Limiter{mem}
 }
 
-func (m *memLimiter) getLimit(key string, policy ...int) ([]interface{}, error) {
+func (m *memLimiter) getLimit(key string) ([]interface{}, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var md metaData

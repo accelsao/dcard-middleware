@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
+	// "strings"
 	"time"
 )
 
@@ -19,7 +19,7 @@ type RedisClient interface {
 }
 
 type abstractLimiter interface {
-	getLimit(key string, policy ...int) ([]interface{}, error)
+	getLimit(key string) ([]interface{}, error)
 	removeLimit(key string) error
 }
 
@@ -37,7 +37,7 @@ type Options struct {
 }
 
 // NumofResult is set for assertion
-const NumofResult = 2
+const NumofResult = 3
 
 // Result includes
 // 1. remaining count for specific ip
@@ -45,6 +45,7 @@ const NumofResult = 2
 type Result struct {
 	Remaining int
 	Reset     time.Time
+	Duration  time.Duration
 }
 
 type redisLimiter struct {
@@ -83,12 +84,17 @@ func newRedisLimiter(opts *Options) *Limiter {
 	return &Limiter{r}
 }
 
-func (r *redisLimiter) getLimit(key string, policy ...int) ([]interface{}, error) {
+func (r *redisLimiter) getLimit(key string) ([]interface{}, error) {
 	keys := []string{key}
-	args := make([]interface{}, 3, 3)
+	// 1. timestamp
+	// 2. ipLimit
+	// 3. duration
+	capacity := 3
+	args := make([]interface{}, capacity, capacity)
 	args[0] = genTimestamp()
 	args[1] = r.ipLimit
 	args[2] = r.duration
+
 	res, err := r.rc.RateEvalSha(r.sha1, keys, args...)
 	if err != nil {
 		return nil, err
@@ -118,12 +124,14 @@ func (l *Limiter) Get(ip string) (Result, error) {
 	case time.Time:
 		result.Remaining = res[0].(int)
 		result.Reset = res[1].(time.Time)
+		// result.Duration = res[2].(time.Duration)
 	default:
 		result.Remaining = int(res[0].(int64))
 		timestamp := res[1].(int64)
 		sec := timestamp / 1e3
 		nsec := (timestamp - sec*1e3) * 1e6
 		result.Reset = time.Unix(sec, nsec)
+		result.Duration = time.Duration(res[2].(int64) * 1e6)
 	}
 
 	return result, nil
@@ -136,9 +144,4 @@ func (r *redisLimiter) removeLimit(key string) error {
 // Remove remove limiter record for id
 func (l *Limiter) Remove(ip string) error {
 	return l.removeLimit(ip)
-}
-
-func isNoScriptErr(err error) bool {
-	return strings.HasPrefix(
-		err.Error(), "NOSCRIPT ")
 }

@@ -55,6 +55,7 @@ func TestRedisRateLimiter(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	defer rdb.Close()
 
 	t.Run("ratelimiter.New, With Default Options", func(t *testing.T) {
@@ -69,17 +70,24 @@ func TestRedisRateLimiter(t *testing.T) {
 			res, err := limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(999, res.Remaining)
-			assert.True(res.Reset.UnixNano() > time.Now().UnixNano())
+			res, err = limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(998, res.Remaining)
+			s.FastForward(time.Hour + time.Millisecond)
+			res, err = limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(999, res.Remaining)
 			res, err = limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(998, res.Remaining)
 		})
 		t.Run("limiter.Remove", func(t *testing.T) {
-			err := limiter.Remove(id)
+			res, err := limiter.Get(id)
 			assert.Nil(err)
+			assert.Equal(997, res.Remaining)
 			err = limiter.Remove(id)
 			assert.Nil(err)
-			res, err := limiter.Get(id)
+			res, err = limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(999, res.Remaining)
 		})
@@ -96,32 +104,39 @@ func TestRedisRateLimiter(t *testing.T) {
 				Duration: time.Second,
 				Client:   &redisClient{rdb}})
 		})
+
 		t.Run("limiter.Get", func(t *testing.T) {
 			res, err := limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(1, res.Remaining)
-			assert.True(res.Reset.UnixNano() > time.Now().UnixNano())
-			assert.True(res.Reset.UnixNano() <= time.Now().Add(time.Second).UnixNano())
-
+			s.FastForward(time.Millisecond * 500)
 			res, err = limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(0, res.Remaining)
 			res, err = limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(-1, res.Remaining)
+			s.FastForward(time.Millisecond * 499)
 			res, err = limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(-1, res.Remaining)
-		})
-		t.Run("limiter.Remove", func(t *testing.T) {
-			err := limiter.Remove(id)
-			assert.Nil(err)
-			err = limiter.Remove(id)
-			assert.Nil(err)
-			res, err := limiter.Get(id)
+			s.FastForward(time.Millisecond * 1)
+			res, err = limiter.Get(id)
 			assert.Nil(err)
 			assert.Equal(1, res.Remaining)
 		})
+
+		t.Run("limiter.Remove", func(t *testing.T) {
+			res, err := limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(0, res.Remaining)
+			err = limiter.Remove(id)
+			assert.Nil(err)
+			res, err = limiter.Get(id)
+			assert.Nil(err)
+			assert.Equal(1, res.Remaining)
+		})
+
 	})
 
 }

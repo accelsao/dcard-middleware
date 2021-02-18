@@ -11,13 +11,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/accelsao/dcard-middleware/middleware"
+	ratelimiter "github.com/accelsao/dcard-middleware/ratelimiter"
 	"github.com/go-redis/redis/v8"
 )
 
 var _ = fmt.Printf
 var ctx = context.Background()
-var use_mem bool
+var useMem bool
+var ipLimit int
+var duration time.Duration
 
 // Implements RedisClient for redis.Client
 type redisClient struct {
@@ -49,18 +51,18 @@ func GetIP(r *http.Request) string {
 func NewServer() *http.Server {
 	mux := http.NewServeMux()
 
-	var limiter *middleware.Limiter
-	if use_mem {
-		limiter = middleware.New(middleware.Options{
-			IPLimit:  2,
-			Duration: time.Second * 10,
+	var limiter *ratelimiter.Limiter
+	if useMem {
+		limiter = ratelimiter.New(ratelimiter.Options{
+			IPLimit:  ipLimit,
+			Duration: duration,
 		})
 
 	} else {
 		client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-		limiter = middleware.New(middleware.Options{
-			IPLimit:  2,
-			Duration: time.Minute,
+		limiter = ratelimiter.New(ratelimiter.Options{
+			IPLimit:  ipLimit,
+			Duration: duration,
 			Client:   &redisClient{client},
 		})
 	}
@@ -90,12 +92,18 @@ func NewServer() *http.Server {
 	return s
 }
 
-func main() {
-
-	useMemFlag := flag.Bool("use_mem", false, "set to use memory")
+func init() {
+	flag.IntVar(&ipLimit, "ipLimit", 1000, "set the rate limit, default=1000")
+	flag.BoolVar(&useMem, "useMem", false, "set useMem flag, default=false")
+	flag.DurationVar(&duration, "duration", time.Hour, "set the duration for set, default=time.Hour")
 	flag.Parse()
-	use_mem = *useMemFlag
+	fmt.Println("Config:")
+	fmt.Printf("--ipLimit: %v\n", ipLimit)
+	fmt.Printf("--duration: %v\n", duration)
+	fmt.Printf("--useMem: %v\n", useMem)
+}
 
+func main() {
 	s := NewServer()
 
 	idleConnsClosed := make(chan struct{})

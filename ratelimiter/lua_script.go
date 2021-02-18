@@ -3,7 +3,19 @@ package middleware
 // rateLimitScript is script for ratelimiter
 const rateLimitScript = `
 -- KEYS[1]: IP address
--- duration (second)
+-- ARGV[1]: current time
+-- ARGV[2]: ipLimit
+-- ARGV[3]: duration
+
+-- HASH: KEYS[1]
+-- remains: availble times
+-- reset: time for reset
+
+-- RESULT:
+-- [1] remains: remains requeset times for particular IP
+-- [2] reset: reset time for particular IP
+-- [3] duration: for debugging
+
 local IP = KEYS[1]
 local timeNow = tonumber(ARGV[1])
 local ipLimit = tonumber(ARGV[2])
@@ -12,21 +24,25 @@ local userInfo = redis.call('HGETALL', IP)
 local reset = tonumber(userInfo[4])
 local result = {}
 
-if #userInfo == 0 or timeNow > reset then
-    reset = timeNow + duration
-    redis.call('HMSET', IP, "count", 1, "reset", reset)
+-- print(IP, redis.call('PTTL', IP))
+
+if #userInfo == 0 then
     result[1] = ipLimit - 1
-    result[2] = reset
+    result[2] = timeNow + duration
+    result[3] = duration
+
+    redis.call('HSET', IP, 'remains', result[1], 'reset', result[2])
+    redis.call('PEXPIRE', IP, duration)
 else
-    local count = tonumber(userInfo[2])
-    if count < ipLimit then
-        local new_count = redis.call('HINCRBY', IP, "count", 1)
-        result[1] = ipLimit - new_count
-        result[2] = reset
-    else
-        result[1] = -1;
-        result[2] = reset
+    local newRemains = redis.call('HINCRBY', IP, 'remains', -1)
+
+    if newRemains < 0 then
+        newRemains = -1
     end
+
+    result[1] = newRemains
+    result[2] = reset
+    result[3] = duration
 end
 return result
 `
@@ -54,4 +70,3 @@ end
 result[2] = redis.call('TTL', IP)
 return result
 `
-
