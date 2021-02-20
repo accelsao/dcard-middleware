@@ -5,8 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
+
+	"sort"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
@@ -32,6 +35,30 @@ func (c *redisClient) RateEvalSha(sha1 string, keys []string, args ...interface{
 
 func (c *redisClient) RateScriptLoad(script string) (string, error) {
 	return c.ScriptLoad(ctx, script).Result()
+}
+
+type redisRingClient struct {
+	*redis.Ring
+}
+
+func (r *redisRingClient) RateDel(key string) error {
+	return r.Del(ctx, key).Err()
+}
+
+func (r *redisRingClient) RateEvalSha(sha1 string, keys []string, args ...interface{}) (interface{}, error) {
+	return r.EvalSha(ctx, sha1, keys, args...).Result()
+}
+
+func (r *redisRingClient) RateScriptLoad(script string) (string, error) {
+	var sha1 string
+	err := r.ForEachShard(ctx, func(ctx context.Context, shard *redis.Client) error {
+		res, err := shard.ScriptLoad(ctx, script).Result()
+		if err == nil {
+			sha1 = res
+		}
+		return err
+	})
+	return sha1, err
 }
 
 func TestRedisRateLimiter(t *testing.T) {
@@ -139,10 +166,86 @@ func TestRedisRateLimiter(t *testing.T) {
 
 	})
 
+	t.Run("ratelimiter.New with redis ring", func(t *testing.T) {
+
+		s1, err := miniredis.Run()
+		if err != nil {
+			panic(err)
+		}
+		defer s1.Close()
+		s2, err := miniredis.Run()
+		if err != nil {
+			panic(err)
+		}
+		defer s2.Close()
+
+		var limiter *Limiter
+		t.Run("multi server for an IP address", func(t *testing.T) {
+			assert := assert.New(t)
+			var wg sync.WaitGroup
+			var id = genID()
+			var resp = NewRingResult(1000)
+			var worker = func(r *redis.Ring, l *Limiter) {
+				defer wg.Done()
+				defer r.Close()
+				for i := 0; i < 100; i++ {
+					res, err := l.Get(id)
+					assert.Nil(err)
+					resp.Push(res.Remaining)
+				}
+			}
+			wg.Add(10)
+			for i := 0; i < 10; i++ {
+				rdb := redis.NewRing(&redis.RingOptions{
+					Addrs: map[string]string{
+						"shard1": s1.Addr(),
+						"shard2": s2.Addr(),
+					},
+				})
+				limiter = New(Options{
+					IPLimit:  997,
+					Duration: time.Minute,
+					Client:   &redisRingClient{rdb}})
+				go worker(rdb, limiter)
+			}
+			wg.Wait()
+			res := resp.Value()
+			sort.Ints(res)
+			assert.Equal(res[0], -1)
+			assert.Equal(res[1], -1)
+			for i := 2; i < 1000; i++ {
+				assert.Equal(res[i], i-3)
+			}
+
+		})
+
+	})
+
 }
 
 func genID() string {
 	buf := make([]byte, 12)
 	rand.Read(buf)
 	return hex.EncodeToString(buf)
+}
+
+type RingResult struct {
+	mu  sync.Mutex
+	val []int
+}
+
+func NewRingResult(cap int) RingResult {
+	return RingResult{
+		val: make([]int, 0, cap),
+	}
+}
+
+func (r *RingResult) Push(v int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.val = append(r.val, v)
+}
+
+func (r *RingResult) Value() []int {
+	return r.val
 }

@@ -16,11 +16,17 @@
 ![](https://i.imgur.com/R2zeoWi.png)
 
 # dcard-middleware
-- [X] client visit times count
-- [X] server timeout for each IP
-- [X] add get/remove test (redis)
+Rate Limiting
+1000 times in an hour for each IP address
+response `X-RateLimit-Remaining` (remains time to visit) and `X-RateLimit-Reset` (time to reset)
+
+- [X] count client visiting counts
+- [X] add timeout for each IP address
 - [X] add get/remove test (mem)
-- [ ] redis call, use set with exat or pxat after redis 6.2 is available
+- [X] add get/remove test (Redis)
+- [X] add Redis Ring (test only)
+- [ ] use `PXAT` if `alicebob/miniredis` is available for redis v6.2
+- [ ] add `atomic` for mem
 
 # QA
 ## Why use Redis, instead of golang map?
